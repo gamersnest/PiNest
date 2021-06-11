@@ -49,10 +49,45 @@ typedef struct
 typedef struct
 {
     char *server_address;
-    int server_port;
+    unsigned short server_port;
     unsigned short mtu_size;
     unsigned long long client_guid;
 } open_connection_request_2_t;
+
+typedef struct
+{
+    unsigned long long server_guid;
+    char *client_address;
+    unsigned short client_port;
+    unsigned short mtu_size;
+    unsigned char use_encryption;
+} open_connection_reply_2_t;
+
+typedef struct
+{
+    unsigned long long client_guid;
+    unsigned long long request_timestamp;
+} connection_request_t;
+
+typedef struct
+{
+    unsigned char reliability;
+    unsigned char is_fragmented;
+    unsigned int reliable_frame_index;
+    unsigned int sequenced_frame_index;
+    unsigned int ordered_frame_index;
+    unsigned char order_channel;
+    unsigned int compound_size;
+    unsigned short compound_id;
+    unsigned int index;
+} frame_t;
+
+typedef struct
+{
+    unsigned int sequence_number;
+    unsigned int frame_count;
+    frame_t frames[];
+} frame_set;
 
 unconnected_ping_t decode_unconnected_ping(packet_t packet);
 packet_t encode_unconnected_ping(unconnected_ping_t packet);
@@ -64,5 +99,7 @@ open_connection_reply_1_t decode_open_connection_reply_1(packet_t packet);
 packet_t encode_open_connection_reply_1(open_connection_reply_1_t packet);
 open_connection_request_2_t decode_open_connection_request_2(packet_t packet);
 packet_t encode_open_connection_request_2(open_connection_request_2_t packet);
+open_connection_reply_2_t decode_open_connection_reply_2(packet_t packet);
+packet_t encode_open_connection_reply_2(open_connection_reply_2_t packet);
 
 #endif

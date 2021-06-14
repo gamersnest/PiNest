@@ -18,8 +18,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CONNECTIONS_COUNT 12
-
 typedef struct
 {
 	char *address;
@@ -28,79 +26,69 @@ typedef struct
 	unsigned short mtu_size;
 } connection_t;
 
-connection_t connections[CONNECTIONS_COUNT];
-char connection_slots[CONNECTIONS_COUNT];
+struct connection_node {
+	connection_t connection;
+	struct connection_node *next;
+};
 
-void init_connection_slots()
-{
-	int i;
-	for (i = 0; i < CONNECTIONS_COUNT; ++i)
-	{
-		connection_slots[i] = 0x00;
-	}
-}
+struct connection_node connections;
 
 void add_connection(connection_t connection)
 {
-	int i;
-	for (i = 0; i < CONNECTIONS_COUNT; ++i)
+	struct connection_node new_node;
+	new_node.connection = connection;
+	new_node.next = NULL;
+	struct connection_node *last = &connections;
+	if (last == NULL)
 	{
-		if (connection_slots[i] == 0x00)
-		{
-			connections[i] = connection;
-			connection_slots[i] = 0x01;
-			break;
-		}
+		last->connection = connection;
+		last->next = NULL;
+		return;
 	}
+	while (last->next != NULL)
+	{
+		last = last->next;
+	}
+	last->next = &new_node;
 }
 
 connection_t *get_connection(char *address, unsigned short port)
 {
-	int i;
-	for (i = 0; i < CONNECTIONS_COUNT; ++i)
+	struct connection_node *last = &connections;
+	while (1)
 	{
-		if (connection_slots[i] != 0x00)
+		if (last->connection.address == address || last->connection.port == port)
 		{
-			if (strcmp(address, connections[i].address) == 0)
-			{
-				if (port == connections[i].port)
-				{
-					return &connections[i];
-				}
-			}
+			return &last->connection;
 		}
+		last = last->next;
 	}
-	return NULL;
 }
 
 void remove_connection(char *address, unsigned short port)
 {
-	int i;
-	for (i = 0; i < CONNECTIONS_COUNT; ++i)
+	struct connection_node *last = &connections;
+	struct connection_node next;
+	while (1)
 	{
-		if (connection_slots[i] != 0x00)
+		if (last->connection.address == address || last->connection.port == port)
 		{
-			if (strcmp(address, connections[i].address) == 0)
-			{
-				if (port == connections[i].port)
-				{
-					memset(&connections[i], 0, sizeof(connections[i]));
-					connection_slots[i] = 0x00;
-				}
-			}
+			next = (struct connection_node) *last->next;
+			last->connection = next.connection;
+			last->next = next.next;
 		}
+		last = last->next;
 	}
 }
 
 int main(int argc, char *argv[])
 {
-	init_connection_slots();
     int sock = create_socket("0.0.0.0", 19132);
     while (1)
     {
 		sockin_t out = receive_data(sock);
 		printf("0x%X -> %d\n", out.buffer[0], out.buffer_length);
-		if (out.buffer[0] == ID_UNCONNECTED_PING_OPEN_CONNECTIONS)
+		if (out.buffer[0] == ID_UNCONNECTED_PING || out.buffer[0] == ID_UNCONNECTED_PING_OPEN_CONNECTIONS)
 		{
 			packet_t data;
 			data.buffer = out.buffer;
@@ -109,7 +97,7 @@ int main(int argc, char *argv[])
 			unconnected_pong_t new_packet;
 			new_packet.client_timestamp = packet.client_timestamp;
 			new_packet.server_guid = 12345678;
-			new_packet.server_name = "MCCPP;Demo;Hello world";
+			new_packet.server_name = "MCPE;Dedicated Server;480;1.17.0;0;10;12345678;"; /*"MCCPP;Demo;Hello world";*/
 			packet_t new_data = encode_unconnected_pong(new_packet);
 			sockin_t st;
 			st.buffer = new_data.buffer;
@@ -161,6 +149,8 @@ int main(int argc, char *argv[])
 			new_connection.guid = packet.client_guid;
 			new_connection.mtu_size = packet.mtu_size;
 			add_connection(new_connection);
+			printf("%lld\n", new_connection.guid);
+			printf("%lld\n", get_connection(out.address, out.port)->guid);
 		}
 	}
 }

@@ -105,5 +105,6 @@ packet_t encode_open_connection_request_2(open_connection_request_2_t packet);
 open_connection_reply_2_t decode_open_connection_reply_2(packet_t packet);
 packet_t encode_open_connection_reply_2(open_connection_reply_2_t packet);
 frame_set_t decode_frame_set(packet_t packet);
+packet_t encode_frame_set(frame_set_t packet);
 
 #endif

@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 			unconnected_pong_t new_packet;
 			new_packet.client_timestamp = packet.client_timestamp;
 			new_packet.server_guid = 12345678;
-			new_packet.server_name = "MCPE;Dedicated Server;480;1.17.0;0;10;12345678;"; /*"MCCPP;Demo;Hello world";*/
+			new_packet.server_name = "MCCPP;Demo;Dedicated Server"; /*"MCCPP;Demo;Hello world";*/
 			packet_t new_data = encode_unconnected_pong(new_packet);
 			sockin_t st;
 			st.buffer = new_data.buffer;
@@ -171,6 +171,7 @@ int main(int argc, char *argv[])
 			data.buffer = out.buffer;
 			data.length = out.buffer_length;
 			frame_set_t packet = decode_frame_set(data);
+			printf("SEQUENCE NUMBER -> %u\n", packet.sequence_number);
 			printf("FRAME COUNT -> %u\n", packet.frame_count);
 			printf("CUSTOM PACKET -> 0x%X\n", packet.frames[0].body[0] & 0xff);
 		}

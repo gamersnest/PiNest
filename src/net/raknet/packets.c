@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../../net/raknet/packets.h"
+#include "../../net/raknet/reliability_util.h"
 #include "../../net/raknet/message_identifiers.h"
 #include <arpa/inet.h>
 
@@ -370,5 +371,95 @@ packet_t encode_connection_request(connection_request_t packet)
     packet_t result;
     result.buffer = buffer;
     result.length = 17;
+    return result;
+}
+
+frame_set_t decode_frame_set(packet_t packet)
+{
+    frame_set_t result;
+    result.sequence_number = ((packet.buffer[1] & 0xff) << 16);
+    result.sequence_number |= ((packet.buffer[2] & 0xff) << 8);
+    result.sequence_number |= packet.buffer[3] & 0xff;
+    int offset = 4;
+    result.frames = malloc(sizeof(frame_t));
+    result.frame_count = 0;
+    frame_t frame;
+    while (offset < packet.length)
+    {
+        frame_t frame;
+        unsigned char flags = packet.buffer[offset] & 0xff;
+        offset += 1;
+        frame.reliability = (flags & 0xf4) >> 5;
+        frame.is_fragmented = (flags & 0x10) > 0;
+        frame.body_length = ((packet.buffer[offset] & 0xff) << 8);
+        offset += 1;
+        frame.body_length |= packet.buffer[offset] & 0xff;
+        offset += 1;
+        frame.body_length >>= 3;
+        if (is_reliable(frame.reliability) == 1)
+        {
+            frame.reliable_frame_index = ((packet.buffer[offset] & 0xff) << 16);
+            offset += 1;
+            frame.reliable_frame_index |= ((packet.buffer[offset] & 0xff) << 8);
+            offset += 1;
+            frame.reliable_frame_index |= packet.buffer[offset] & 0xff;
+            offset += 1;
+        }
+        if (is_sequenced(frame.reliability) == 1)
+        {
+            frame.sequenced_frame_index = ((packet.buffer[offset] & 0xff) << 16);
+            offset += 1;
+            frame.sequenced_frame_index |= ((packet.buffer[offset] & 0xff) << 8);
+            offset += 1;
+            frame.sequenced_frame_index |= packet.buffer[offset] & 0xff;
+            offset += 1;
+        }
+        if (is_ordered(frame.reliability) == 1)
+        {
+            frame.ordered_frame_index = ((packet.buffer[offset] & 0xff) << 16);
+            offset += 1;
+            frame.ordered_frame_index |= ((packet.buffer[offset] & 0xff) << 8);
+            offset += 1;
+            frame.ordered_frame_index |= packet.buffer[offset] & 0xff;
+            offset += 1;
+            frame.order_channel = packet.buffer[offset] & 0xff;
+            offset += 1;
+        }
+        if (frame.is_fragmented == 1)
+        {
+            frame.compound_size = ((packet.buffer[offset] & 0xff) << 24);
+            offset += 1;
+            frame.compound_size |= ((packet.buffer[offset] & 0xff) << 16);
+            offset += 1;
+            frame.compound_size |= ((packet.buffer[offset] & 0xff) << 8);
+            offset += 1;
+            frame.compound_size |= packet.buffer[offset] & 0xff;
+            offset += 1;
+            frame.compound_id = ((packet.buffer[offset] & 0xff) << 8);
+            offset += 1;
+            frame.compound_id |= packet.buffer[offset] & 0xff;
+            offset += 1;
+            frame.index = ((packet.buffer[offset] & 0xff) << 24);
+            offset += 1;
+            frame.index |= ((packet.buffer[offset] & 0xff) << 16);
+            offset += 1;
+            frame.index |= ((packet.buffer[offset] & 0xff) << 8);
+            offset += 1;
+            frame.index |= packet.buffer[offset] & 0xff;
+            offset += 1;
+        }
+        frame.body = malloc(frame.body_length);
+        int i;
+        for (i = 0; i < frame.body_length; ++i)
+        {
+            frame.body[i] = packet.buffer[offset + i];
+        }
+        offset += frame.body_length;
+        /*result.frames.frame = frame;*/
+        ++result.frame_count;
+        result.frames = realloc(result.frames, result.frame_count * sizeof(frame_t));
+        result.frames[result.frame_count - 1] = frame;
+        break;
+    }
     return result;
 }

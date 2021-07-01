@@ -16,6 +16,7 @@
 #include "./net/socket.h"
 #include <arpa/inet.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct
@@ -26,69 +27,81 @@ typedef struct
 	unsigned short mtu_size;
 } connection_t;
 
-struct connection_node {
-	connection_t connection;
-	struct connection_node *next;
-};
+connection_t *connections;
+unsigned int connection_count;
 
-struct connection_node connections;
+void init_connections()
+{
+	connections = malloc(sizeof(connection_t));
+	connection_count = 0;
+}
 
 void add_connection(connection_t connection)
 {
-	struct connection_node new_node;
-	new_node.connection = connection;
-	new_node.next = NULL;
-	struct connection_node *last = &connections;
-	if (last == NULL)
+	int i;
+	for (i = 0; i < connection_count; ++i)
 	{
-		last->connection = connection;
-		last->next = NULL;
-		return;
+		if (connection.address == connections[i].address && connection.port == connections[i].port)
+		{
+			return;
+		}
 	}
-	while (last->next != NULL)
-	{
-		last = last->next;
-	}
-	last->next = &new_node;
+	++connection_count;
+    connections = realloc(connections, connection_count * sizeof(connection_t));
+    connections[connection_count - 1] = connection;
 }
 
 connection_t *get_connection(char *address, unsigned short port)
 {
-	struct connection_node *last = &connections;
-	while (1)
+	int i;
+	for (i = 0; i < connection_count; ++i)
 	{
-		if (last->connection.address == address || last->connection.port == port)
+		if (address == connections[i].address && port == connections[i].port)
 		{
-			return &last->connection;
+			return &connections[i];
 		}
-		last = last->next;
 	}
+	return NULL;
 }
 
 void remove_connection(char *address, unsigned short port)
 {
-	struct connection_node *last = &connections;
-	struct connection_node next;
-	while (1)
+	int i;
+	for (i = 0; i < connection_count; ++i)
 	{
-		if (last->connection.address == address || last->connection.port == port)
+		if (address == connections[i].address && port == connections[i].port)
 		{
-			next = (struct connection_node) *last->next;
-			last->connection = next.connection;
-			last->next = next.next;
+			connection_t *temp;
+			unsigned int cnt = 0;
+			int j;
+			for (j = 0; j < i; ++j) {
+				++cnt;
+    			temp = realloc(temp, cnt * sizeof(connection_t));
+    			temp[cnt - 1] = connections[j];
+			}
+			int k;
+			for (k = i + 1; k < connection_count; ++k)
+			{
+				++cnt;
+    			temp = realloc(temp, cnt * sizeof(connection_t));
+    			temp[cnt - 1] = connections[k];
+			}
+			--connection_count;
+			connections = temp;
+			break;
 		}
-		last = last->next;
 	}
 }
 
 int main(int argc, char *argv[])
 {
+	init_connections();
     int sock = create_socket("0.0.0.0", 19132);
     while (1)
     {
 		sockin_t out = receive_data(sock);
-		printf("0x%X -> %d\n", out.buffer[0], out.buffer_length);
-		if (out.buffer[0] == ID_UNCONNECTED_PING || out.buffer[0] == ID_UNCONNECTED_PING_OPEN_CONNECTIONS)
+		printf("0x%X -> %d\n", out.buffer[0] & 0xff, out.buffer_length);
+		if ((out.buffer[0] & 0xff) == ID_UNCONNECTED_PING || out.buffer[0] == ID_UNCONNECTED_PING_OPEN_CONNECTIONS)
 		{
 			packet_t data;
 			data.buffer = out.buffer;
@@ -106,7 +119,7 @@ int main(int argc, char *argv[])
 			st.port = out.port;
 			send_data(sock, st);
 		}
-		else if (out.buffer[0] == ID_OPEN_CONNECTION_REQUEST_1)
+		else if ((out.buffer[0] & 0xff) == ID_OPEN_CONNECTION_REQUEST_1)
 		{
 			packet_t data;
 			data.buffer = out.buffer;
@@ -124,7 +137,7 @@ int main(int argc, char *argv[])
 			st.port = out.port;
 			send_data(sock, st);
 		}
-		else if (out.buffer[0] == ID_OPEN_CONNECTION_REQUEST_2)
+		else if ((out.buffer[0] & 0xff) == ID_OPEN_CONNECTION_REQUEST_2)
 		{
 			packet_t data;
 			data.buffer = out.buffer;
@@ -151,6 +164,15 @@ int main(int argc, char *argv[])
 			add_connection(new_connection);
 			printf("%lld\n", new_connection.guid);
 			printf("%lld\n", get_connection(out.address, out.port)->guid);
+		}
+		else if ((out.buffer[0] & 0xff) >= 0x80 && (out.buffer[0] & 0xff) <= 0x8f)
+		{
+			packet_t data;
+			data.buffer = out.buffer;
+			data.length = out.buffer_length;
+			frame_set_t packet = decode_frame_set(data);
+			printf("FRAME COUNT -> %u\n", packet.frame_count);
+			printf("CUSTOM PACKET -> 0x%X\n", packet.frames[0].body[0] & 0xff);
 		}
 	}
 }

@@ -71,8 +71,9 @@ typedef struct
 
 typedef struct
 {
-    unsigned char reliability;
+	unsigned char reliability;
     unsigned char is_fragmented;
+    unsigned short body_length;
     unsigned int reliable_frame_index;
     unsigned int sequenced_frame_index;
     unsigned int ordered_frame_index;
@@ -80,15 +81,17 @@ typedef struct
     unsigned int compound_size;
     unsigned short compound_id;
     unsigned int index;
+    char *body;
 } frame_t;
 
 typedef struct
 {
     unsigned int sequence_number;
+    frame_t *frames;
     unsigned int frame_count;
-    frame_t frames[];
-} frame_set;
+} frame_set_t;
 
+struct frame_set_node *append_frame(struct frame_set_node *frame_set, frame_t frame);
 unconnected_ping_t decode_unconnected_ping(packet_t packet);
 packet_t encode_unconnected_ping(unconnected_ping_t packet);
 unconnected_pong_t decode_unconnected_pong(packet_t packet);
@@ -101,5 +104,6 @@ open_connection_request_2_t decode_open_connection_request_2(packet_t packet);
 packet_t encode_open_connection_request_2(open_connection_request_2_t packet);
 open_connection_reply_2_t decode_open_connection_reply_2(packet_t packet);
 packet_t encode_open_connection_reply_2(open_connection_reply_2_t packet);
+frame_set_t decode_frame_set(packet_t packet);
 
 #endif

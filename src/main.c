@@ -14,7 +14,17 @@
 #include "./net/raknet/packets.h"
 #include "./net/raknet/message_identifiers.h"
 #include "./net/socket.h"
+#ifdef _WIN32
+
+#include <winsock2.h>
+#pragma comment(lib,"ws2_32.lib")
+
+#endif
+#ifdef linux
+
 #include <arpa/inet.h>
+
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

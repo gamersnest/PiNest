@@ -11,18 +11,38 @@
 
  */
 
+#ifdef _WIN32
+
+#include <winsock2.h>
+#pragma comment(lib,"ws2_32.lib")
+
+#endif
+#ifdef linux
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+
+#endif
 #include "../net/socket.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <sys/types.h>
 
 
 int create_socket(char *address, int port)
 {
+    #ifdef _WIN32
+
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2,2),&wsa) != 0)
+	{
+        printf("Failed. Error Code : %d", WSAGetLastError());
+        exit(EXIT_FAILURE);
+	}
+
+    #endif
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in s_address;
     memset(&s_address, 0, sizeof(s_address));
@@ -42,12 +62,12 @@ sockin_t receive_data(int sock)
     struct sockaddr_in s_address;
     memset(&s_address, 0, sizeof(s_address));
     char buffer[65535];
-    socklen_t s_address_length = sizeof(s_address);
+    unsigned int s_address_length = sizeof(s_address);
     int length = recvfrom(
         sock,
         (char *) buffer,
         65535,
-        MSG_CONFIRM,
+        0,
         (struct sockaddr *) &s_address,
         &s_address_length
     );
@@ -70,7 +90,7 @@ void send_data(int sock, sockin_t in)
         sock,
         (char *) in.buffer,
         in.buffer_length,
-        MSG_CONFIRM,
+        0,
         (struct sockaddr *) &s_address,
         sizeof(s_address)
     );

@@ -17,7 +17,17 @@
 #include "../../net/raknet/packets.h"
 #include "../../net/raknet/reliability_util.h"
 #include "../../net/raknet/message_identifiers.h"
+#ifdef _WIN32
+
+#include <winsock2.h>
+#pragma comment(lib,"ws2_32.lib")
+
+#endif
+#ifdef linux
+
 #include <arpa/inet.h>
+
+#endif
 
 char magic[16] = {
     0x00, 0xff, 0xff, 0x00,
@@ -241,7 +251,7 @@ packet_t encode_open_connection_request_2(open_connection_request_2_t packet)
         buffer[i + 1] = magic[i];
     }
     buffer[17] = 4;
-    in_addr_t address = inet_addr(packet.server_address);
+    size_t address = inet_addr(packet.server_address);
     buffer[18] = ~(address & 0xff);
     buffer[19] = ~((address >> 8) & 0xff) & 0xff;
     buffer[20] = ~((address >> 16) & 0xff) & 0xff;
@@ -310,7 +320,7 @@ packet_t encode_open_connection_reply_2(open_connection_reply_2_t packet)
     buffer[23] = (packet.server_guid >> 8) & 0xff;
     buffer[24] = packet.server_guid & 0xff;
     buffer[25] = 4;
-    in_addr_t address = inet_addr(packet.client_address);
+    size_t address = inet_addr(packet.client_address);
     buffer[26] = ~(address & 0xff);
     buffer[27] = ~((address >> 8) & 0xff) & 0xff;
     buffer[28] = ~((address >> 16) & 0xff) & 0xff;

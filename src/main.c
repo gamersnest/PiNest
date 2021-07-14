@@ -11,6 +11,7 @@
 
  */
 
+#include "./binary_stream/binary_stream.h"
 #include "./net/raknet/packets.h"
 #include "./net/raknet/message_identifiers.h"
 #include "./net/socket.h"
@@ -113,56 +114,62 @@ int main(int argc, char *argv[])
 		printf("0x%X -> %d\n", out.buffer[0] & 0xff, out.buffer_length);
 		if ((out.buffer[0] & 0xff) == ID_UNCONNECTED_PING || out.buffer[0] == ID_UNCONNECTED_PING_OPEN_CONNECTIONS)
 		{
-			packet_t data;
-			data.buffer = out.buffer;
-			data.length = out.buffer_length;
-			unconnected_ping_t packet = decode_unconnected_ping(data);
+			binary_stream_t stream;
+    		stream.buffer = out.buffer;
+    		stream.offset = 0;
+    		stream.size = out.buffer_length;
+			unconnected_ping_t packet = decode_unconnected_ping(&stream);
 			unconnected_pong_t new_packet;
 			new_packet.client_timestamp = packet.client_timestamp;
 			new_packet.server_guid = 12345678;
 			new_packet.server_name = "MCCPP;Demo;Dedicated Server"; /*"MCCPP;Demo;Hello world";*/
-			packet_t new_data = encode_unconnected_pong(new_packet);
+			binary_stream_t new_stream = encode_unconnected_pong(new_packet);
 			sockin_t st;
-			st.buffer = new_data.buffer;
-			st.buffer_length = new_data.length;
+			st.buffer = new_stream.buffer;
+			st.buffer_length = new_stream.size;
 			st.address = out.address;
 			st.port = out.port;
 			send_data(sock, st);
 		}
 		else if ((out.buffer[0] & 0xff) == ID_OPEN_CONNECTION_REQUEST_1)
 		{
-			packet_t data;
-			data.buffer = out.buffer;
-			data.length = out.buffer_length;
-			open_connection_request_1_t packet = decode_open_connection_request_1(data);
+			binary_stream_t stream;
+    		stream.buffer = out.buffer;
+    		stream.offset = 0;
+    		stream.size = out.buffer_length;
+			open_connection_request_1_t packet = decode_open_connection_request_1(&stream);
 			open_connection_reply_1_t new_packet;
 			new_packet.server_guid = 12345678;
 			new_packet.use_security = 0;
 			new_packet.mtu_size = packet.mtu_size;
-			packet_t new_data = encode_open_connection_reply_1(new_packet);
+			printf("PROTOCOL VERSION -> %u\n", packet.protocol_version);
+			printf("MTU -> %u\n", packet.mtu_size);
+			binary_stream_t new_stream = encode_open_connection_reply_1(new_packet);
 			sockin_t st;
-			st.buffer = new_data.buffer;
-			st.buffer_length = new_data.length;
+			st.buffer = new_stream.buffer;
+			st.buffer_length = new_stream.size;
 			st.address = out.address;
 			st.port = out.port;
 			send_data(sock, st);
 		}
 		else if ((out.buffer[0] & 0xff) == ID_OPEN_CONNECTION_REQUEST_2)
 		{
-			packet_t data;
-			data.buffer = out.buffer;
-			data.length = out.buffer_length;
-			open_connection_request_2_t packet = decode_open_connection_request_2(data);
+			binary_stream_t stream;
+    		stream.buffer = out.buffer;
+    		stream.offset = 0;
+    		stream.size = out.buffer_length;
+			open_connection_request_2_t packet = decode_open_connection_request_2(&stream);
 			open_connection_reply_2_t new_packet;
 			new_packet.server_guid = 12345678;
-			new_packet.client_address = out.address;
-			new_packet.client_port = out.port;
+			new_packet.client_address.hostname = out.address;
+			new_packet.client_address.port = out.port;
+			new_packet.client_address.version = 4;
 			new_packet.mtu_size = packet.mtu_size;
 			new_packet.use_encryption = 0;
-			packet_t new_data = encode_open_connection_reply_2(new_packet);
+			binary_stream_t new_stream = encode_open_connection_reply_2(new_packet);
 			sockin_t st;
-			st.buffer = new_data.buffer;
-			st.buffer_length = new_data.length;
+			st.buffer = new_stream.buffer;
+			st.buffer_length = new_stream.size;
 			st.address = out.address;
 			st.port = out.port;
 			send_data(sock, st);

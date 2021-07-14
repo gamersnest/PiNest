@@ -15,11 +15,20 @@
 
 #define PACKETS_H
 
+#include "../../binary_stream/binary_stream.h"
+
 typedef struct
 {
     char *buffer;
     int length;
 } packet_t;
+
+typedef struct
+{
+    char *hostname;
+    unsigned short port;
+    unsigned char version;
+} address_t;
 
 typedef struct
 {
@@ -48,8 +57,7 @@ typedef struct
 
 typedef struct
 {
-    char *server_address;
-    unsigned short server_port;
+    address_t server_address;
     unsigned short mtu_size;
     unsigned long long client_guid;
 } open_connection_request_2_t;
@@ -57,8 +65,7 @@ typedef struct
 typedef struct
 {
     unsigned long long server_guid;
-    char *client_address;
-    unsigned short client_port;
+    address_t client_address;
     unsigned short mtu_size;
     unsigned char use_encryption;
 } open_connection_reply_2_t;
@@ -91,19 +98,21 @@ typedef struct
     unsigned int frame_count;
 } frame_set_t;
 
-struct frame_set_node *append_frame(struct frame_set_node *frame_set, frame_t frame);
-unconnected_ping_t decode_unconnected_ping(packet_t packet);
-packet_t encode_unconnected_ping(unconnected_ping_t packet);
-unconnected_pong_t decode_unconnected_pong(packet_t packet);
-packet_t encode_unconnected_pong(unconnected_pong_t packet);
-open_connection_request_1_t decode_open_connection_request_1(packet_t packet);
-packet_t open_connection_request_1(open_connection_request_1_t packet);
-open_connection_reply_1_t decode_open_connection_reply_1(packet_t packet);
-packet_t encode_open_connection_reply_1(open_connection_reply_1_t packet);
-open_connection_request_2_t decode_open_connection_request_2(packet_t packet);
-packet_t encode_open_connection_request_2(open_connection_request_2_t packet);
-open_connection_reply_2_t decode_open_connection_reply_2(packet_t packet);
-packet_t encode_open_connection_reply_2(open_connection_reply_2_t packet);
+char *get_string(binary_stream_t *stream);
+void put_string(char *value, binary_stream_t *stream);
+unconnected_ping_t decode_unconnected_ping(binary_stream_t *stream);
+binary_stream_t encode_unconnected_ping(unconnected_ping_t packet);
+unconnected_pong_t decode_unconnected_pong(binary_stream_t *stream);
+binary_stream_t encode_unconnected_pong(unconnected_pong_t packet);
+open_connection_request_1_t decode_open_connection_request_1(binary_stream_t *stream);
+binary_stream_t encode_open_connection_request_1(open_connection_request_1_t packet);
+open_connection_reply_1_t decode_open_connection_reply_1(binary_stream_t *stream);
+binary_stream_t encode_open_connection_reply_1(open_connection_reply_1_t packet);
+open_connection_request_2_t decode_open_connection_request_2(binary_stream_t *stream);
+binary_stream_t encode_open_connection_request_2(open_connection_request_2_t packet);
+open_connection_reply_2_t decode_open_connection_reply_2(binary_stream_t *packet);
+binary_stream_t encode_open_connection_reply_2(open_connection_reply_2_t packet);
+// ---------------------------------------------------------------------- //
 frame_set_t decode_frame_set(packet_t packet);
 packet_t encode_frame_set(frame_set_t packet);
 

@@ -14,6 +14,7 @@
 #ifdef _WIN32
 
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #pragma comment(lib,"ws2_32.lib")
 
 #endif
@@ -62,7 +63,7 @@ sockin_t receive_data(int sock)
     struct sockaddr_in s_address;
     memset(&s_address, 0, sizeof(s_address));
     char buffer[65535];
-    unsigned int s_address_length = sizeof(s_address);
+    socklen_t s_address_length = sizeof(s_address);
     int length = recvfrom(
         sock,
         (char *) buffer,

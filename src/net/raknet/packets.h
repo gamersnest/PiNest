@@ -92,6 +92,11 @@ typedef struct
     unsigned int frame_count;
 } frame_set_t;
 
+typedef struct {
+    unsigned int *sequence_numbers;
+    unsigned int sequence_numbers_count;
+} acknowledgement_t;
+
 char *get_string(binary_stream_t *stream);
 void put_string(char *value, binary_stream_t *stream);
 unconnected_ping_t decode_unconnected_ping(binary_stream_t *stream);
@@ -106,7 +111,11 @@ open_connection_request_2_t decode_open_connection_request_2(binary_stream_t *st
 binary_stream_t encode_open_connection_request_2(open_connection_request_2_t packet);
 open_connection_reply_2_t decode_open_connection_reply_2(binary_stream_t *packet);
 binary_stream_t encode_open_connection_reply_2(open_connection_reply_2_t packet);
+connection_request_t decode_connection_request(binary_stream_t *stream);
+binary_stream_t encode_connection_request(connection_request_t packet);
 frame_set_t decode_frame_set(binary_stream_t *stream);
 binary_stream_t encode_frame_set(frame_set_t packet);
+acknowledgement_t decode_acknowledgement(binary_stream_t *stream);
+binary_stream_t encode_acknowledgement(acknowledgement_t packet, unsigned char is_successful);
 
 #endif

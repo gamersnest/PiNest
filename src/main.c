@@ -36,6 +36,7 @@ typedef struct
 	unsigned short port;
 	unsigned long long guid;
 	unsigned short mtu_size;
+	unsigned int last_sequence_number;
 } connection_t;
 
 connection_t *connections;
@@ -178,12 +179,15 @@ int main(int argc, char *argv[])
 			new_connection.port = out.port;
 			new_connection.guid = packet.client_guid;
 			new_connection.mtu_size = packet.mtu_size;
+			new_connection.last_sequence_number = 0;
 			add_connection(new_connection);
 			printf("%lld\n", new_connection.guid);
 			printf("%lld\n", get_connection(out.address, out.port)->guid);
 		}
 		else if ((out.buffer[0] & 0xff) >= 0x80 && (out.buffer[0] & 0xff) <= 0x8f)
 		{
+			connection_t *connection = get_connection(out.address, out.port);
+			sockin_t st;
 			binary_stream_t stream;
     		stream.buffer = out.buffer;
     		stream.offset = 0;
@@ -191,7 +195,40 @@ int main(int argc, char *argv[])
 			frame_set_t packet = decode_frame_set(&stream);
 			printf("SEQUENCE NUMBER -> %u\n", packet.sequence_number);
 			printf("FRAME COUNT -> %u\n", packet.frame_count);
-			printf("CUSTOM PACKET -> 0x%X\n", packet.frames[0].body[0] & 0xff);
+			if (connection->last_sequence_number < packet.sequence_number)
+			{
+				acknowledgement_t nack;
+				nack.sequence_numbers_count = packet.sequence_number - connection->last_sequence_number;
+				nack.sequence_numbers = malloc(nack.sequence_numbers_count * sizeof(unsigned int));
+				int i;
+				int ii = 0;
+				for (i = 0; i < nack.sequence_numbers_count; ++i)
+				{
+					nack.sequence_numbers[i] = i + connection->last_sequence_number;
+				}
+				binary_stream_t nack_stream = encode_acknowledgement(nack, 0);
+				st.buffer = nack_stream.buffer;
+				st.buffer_length = nack_stream.size;
+				st.address = out.address;
+				st.port = out.port;
+				send_data(sock, st);
+			}
+			acknowledgement_t ack;
+			ack.sequence_numbers = malloc(1 * sizeof(unsigned int));
+			ack.sequence_numbers[0] = packet.sequence_number;
+			ack.sequence_numbers_count = 1;
+			binary_stream_t ack_stream = encode_acknowledgement(ack, 1);
+			st.buffer = ack_stream.buffer;
+			st.buffer_length = ack_stream.size;
+			st.address = out.address;
+			st.port = out.port;
+			send_data(sock, st);
+			connection->last_sequence_number = packet.sequence_number;
+			int i;
+			for (i = 0; i < packet.frame_count; ++i)
+			{
+				printf("CUSTOM PACKET -> 0x%X\n", packet.frames[i].body[0] & 0xff);
+			}
 		}
 	}
 }

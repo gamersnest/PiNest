@@ -343,3 +343,91 @@ binary_stream_t encode_frame_set(frame_set_t packet)
     }
     return stream;
 }
+
+acknowledgement_t decode_acknowledgement(binary_stream_t *stream)
+{
+    acknowledgement_t packet;
+    ++stream->offset;
+    packet.sequence_numbers = malloc(sizeof(unsigned int));
+    packet.sequence_numbers_count = 0;
+    unsigned short record_count = get_unsigned_short_be(stream);
+    int i;
+    for (i = 0; i < record_count; ++i)
+    {
+        unsigned char is_single = get_unsigned_byte(stream);
+        int record_start = get_unsigned_triad_le(stream);
+        int record_end = record_start;
+        if (is_single == 0)
+        {
+            record_end = get_unsigned_triad_le(stream);
+        }
+        int record;
+        for (record = record_start; record <= record_end; ++record)
+        {
+            ++packet.sequence_numbers_count;
+            packet.sequence_numbers = realloc(packet.sequence_numbers, packet.sequence_numbers_count * sizeof(unsigned int));
+            packet.sequence_numbers[packet.sequence_numbers_count - 1] = record;
+        }
+    }
+    return packet;
+}
+
+binary_stream_t encode_acknowledgement(acknowledgement_t packet, unsigned char is_successful)
+{
+    binary_stream_t stream;
+    stream.buffer = malloc(0);
+    stream.offset = 0;
+    stream.size = 0;
+    if (is_successful == 0)
+    {
+        put_unsigned_byte(0xa0, &stream);
+    }
+    else
+    {
+        put_unsigned_byte(0xc0, &stream);
+    }
+    binary_stream_t records_stream;
+    records_stream.buffer = malloc(0);
+    records_stream.offset = 0;
+    records_stream.size = 0;
+    int cnt = 0;
+    int temp = 1;
+    int i;
+    for (i = 0; i < packet.sequence_numbers_count; ++i)
+    {
+        if (i != packet.sequence_numbers_count - 1)
+        {
+            if ((packet.sequence_numbers[i + 1] - packet.sequence_numbers[i]) != 1)
+            {
+                ++cnt;
+                if (temp > 1)
+                {
+                    put_unsigned_byte(0, &stream);
+                    put_unsigned_triad_le(packet.sequence_numbers[i - temp + 1], &records_stream);
+                    put_unsigned_triad_le(packet.sequence_numbers[i], &records_stream);
+                }
+                else
+                {
+                    put_unsigned_byte(1, &stream);
+                    put_unsigned_triad_le(packet.sequence_numbers[i], &records_stream);
+                }
+                temp = 1;
+            }
+            else
+            {
+                ++temp;
+            }
+        }
+        else
+        {
+            if (packet.sequence_numbers[i] - packet.sequence_numbers[i - 1] != 1)
+            {
+                ++cnt;
+                put_unsigned_byte(1, &stream);
+                put_unsigned_triad_le(packet.sequence_numbers[i], &records_stream);
+            }
+        }
+    }
+    put_bytes(records_stream.buffer, records_stream.size, &stream);
+    return stream;
+}

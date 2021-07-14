@@ -82,7 +82,7 @@ void remove_connection(char *address, unsigned short port)
 	{
 		if (address == connections[i].address && port == connections[i].port)
 		{
-			connection_t *temp;
+			connection_t *temp = malloc(sizeof(connection_t));
 			unsigned int cnt = 0;
 			int j;
 			for (j = 0; j < i; ++j) {
@@ -184,10 +184,11 @@ int main(int argc, char *argv[])
 		}
 		else if ((out.buffer[0] & 0xff) >= 0x80 && (out.buffer[0] & 0xff) <= 0x8f)
 		{
-			packet_t data;
-			data.buffer = out.buffer;
-			data.length = out.buffer_length;
-			frame_set_t packet = decode_frame_set(data);
+			binary_stream_t stream;
+    		stream.buffer = out.buffer;
+    		stream.offset = 0;
+    		stream.size = out.buffer_length;
+			frame_set_t packet = decode_frame_set(&stream);
 			printf("SEQUENCE NUMBER -> %u\n", packet.sequence_number);
 			printf("FRAME COUNT -> %u\n", packet.frame_count);
 			printf("CUSTOM PACKET -> 0x%X\n", packet.frames[0].body[0] & 0xff);

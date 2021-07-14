@@ -257,193 +257,89 @@ binary_stream_t encode_connection_request(connection_request_t packet)
     return stream;
 }
 
-frame_set_t decode_frame_set(packet_t packet)
+frame_set_t decode_frame_set(binary_stream_t *stream)
 {
-    frame_set_t result;
-    result.sequence_number = ((packet.buffer[3] & 0xff) << 16);
-    result.sequence_number |= ((packet.buffer[2] & 0xff) << 8);
-    result.sequence_number |= packet.buffer[1] & 0xff;
-    int offset = 4;
-    result.frames = malloc(sizeof(frame_t));
-    result.frame_count = 0;
+    frame_set_t packet;
+    ++stream->offset;
+    packet.sequence_number = get_unsigned_triad_le(stream);
+    packet.frames = malloc(sizeof(frame_t));
+    packet.frame_count = 0;
     frame_t frame;
-    while (offset < packet.length)
+    while (stream->offset < stream->size)
     {
         frame_t frame;
-        unsigned char flags = packet.buffer[offset] & 0xff;
-        offset += 1;
+        unsigned char flags = get_unsigned_byte(stream) & 0xff;
         frame.reliability = (flags & 0xf4) >> 5;
         frame.is_fragmented = (flags & 0x10) > 0;
-        frame.body_length = ((packet.buffer[offset] & 0xff) << 8);
-        offset += 1;
-        frame.body_length |= packet.buffer[offset] & 0xff;
-        offset += 1;
-        frame.body_length >>= 3;
+        frame.body_length = get_unsigned_short_be(stream) >> 3;
         if (is_reliable(frame.reliability) == 1)
         {
-            offset += 2;
-            frame.reliable_frame_index = ((packet.buffer[offset] & 0xff) << 16);
-            frame.reliable_frame_index |= ((packet.buffer[offset - 1] & 0xff) << 8);
-            frame.reliable_frame_index |= packet.buffer[offset - 2] & 0xff;
-            offset += 1;
+            frame.reliable_frame_index = get_unsigned_triad_le(stream);
         }
         if (is_sequenced(frame.reliability) == 1)
         {
-            offset += 2;
-            frame.sequenced_frame_index = ((packet.buffer[offset] & 0xff) << 16);
-            frame.sequenced_frame_index |= ((packet.buffer[offset - 1] & 0xff) << 8);
-            frame.sequenced_frame_index |= packet.buffer[offset - 2] & 0xff;
-            offset += 1;
+            frame.sequenced_frame_index = get_unsigned_triad_le(stream);
         }
         if (is_ordered(frame.reliability) == 1)
         {
-            offset += 2;
-            frame.ordered_frame_index = ((packet.buffer[offset] & 0xff) << 16);
-            frame.ordered_frame_index |= ((packet.buffer[offset - 1] & 0xff) << 8);
-            frame.ordered_frame_index |= packet.buffer[offset - 2] & 0xff;
-            offset += 1;
-            frame.order_channel = packet.buffer[offset] & 0xff;
+            frame.ordered_frame_index = get_unsigned_triad_le(stream);
+            frame.order_channel = get_unsigned_byte(stream);
         }
         if (frame.is_fragmented == 1)
         {
-            frame.compound_size = ((packet.buffer[offset] & 0xff) << 24);
-            offset += 1;
-            frame.compound_size |= ((packet.buffer[offset] & 0xff) << 16);
-            offset += 1;
-            frame.compound_size |= ((packet.buffer[offset] & 0xff) << 8);
-            offset += 1;
-            frame.compound_size |= packet.buffer[offset] & 0xff;
-            offset += 1;
-            frame.compound_id = ((packet.buffer[offset] & 0xff) << 8);
-            offset += 1;
-            frame.compound_id |= packet.buffer[offset] & 0xff;
-            offset += 1;
-            frame.index = ((packet.buffer[offset] & 0xff) << 24);
-            offset += 1;
-            frame.index |= ((packet.buffer[offset] & 0xff) << 16);
-            offset += 1;
-            frame.index |= ((packet.buffer[offset] & 0xff) << 8);
-            offset += 1;
-            frame.index |= packet.buffer[offset] & 0xff;
-            offset += 1;
+            frame.compound_size = get_unsigned_int_be(stream);
+            frame.compound_id = get_unsigned_short_be(stream);
+            frame.index = get_unsigned_int_be(stream);
         }
-        frame.body = malloc(frame.body_length);
-        int i;
-        for (i = 0; i < frame.body_length; ++i)
-        {
-            frame.body[i] = packet.buffer[offset + i];
-        }
-        offset += frame.body_length;
-        ++result.frame_count;
-        result.frames = realloc(result.frames, result.frame_count * sizeof(frame_t));
-        result.frames[result.frame_count - 1] = frame;
+        frame.body = get_bytes(frame.body_length, stream);
+        ++packet.frame_count;
+        packet.frames = realloc(packet.frames, packet.frame_count * sizeof(frame_t));
+        packet.frames[packet.frame_count - 1] = frame;
         break;
     }
-    return result;
+    return packet;
 }
 
-packet_t encode_frame_set(frame_set_t packet)
+binary_stream_t encode_frame_set(frame_set_t packet)
 {
-    unsigned int frames_length = 0;
+    binary_stream_t stream;
+    stream.buffer = malloc(0);
+    stream.offset = 0;
+    stream.size = 0;
+    put_unsigned_byte(0x80, &stream);
+    put_unsigned_triad_le(packet.sequence_number, &stream);
     int i;
     for (i = 0; i < packet.frame_count; ++i)
     {
-        frames_length += 3;
+        if (packet.frames[i].is_fragmented == 1)
+        {
+            put_unsigned_byte(packet.frames[i].reliability | 0x10, &stream);
+        }
+        else
+        {
+            put_unsigned_byte(packet.frames[i].reliability, &stream);
+        }
+        put_unsigned_short_be(packet.frames[i].body_length << 3, &stream);
         if (is_reliable(packet.frames[i].reliability))
         {
-            frames_length += 3;
+            put_unsigned_triad_le(packet.frames[i].reliable_frame_index, &stream);
         }
         if (is_sequenced(packet.frames[i].reliability))
         {
-            frames_length += 3;
+            put_unsigned_triad_le(packet.frames[i].sequenced_frame_index, &stream);
         }
         if (is_ordered(packet.frames[i].reliability))
         {
-            frames_length += 4;
+            put_unsigned_triad_le(packet.frames[i].ordered_frame_index, &stream);
+            put_unsigned_byte(packet.frames[i].order_channel, &stream);
         }
         if (packet.frames[i].is_fragmented == 1)
         {
-            frames_length += 4;
+            put_unsigned_int_be(packet.frames[i].compound_size, &stream);
+            put_unsigned_short_be(packet.frames[i].compound_id, &stream);
+            put_unsigned_int_be(packet.frames[i].index, &stream);
         }
-        frames_length += packet.frames[i].body_length;
+        put_bytes(packet.frames[i].body, packet.frames[i].body_length, &stream);
     }
-
-    char *buffer = malloc(4 + frames_length);
-    buffer[0] = 0x80;
-    buffer[3] = (packet.sequence_number >> 16) & 0xff;
-    buffer[2] = (packet.sequence_number >> 8) & 0xff;
-    buffer[1] = packet.sequence_number & 0xff;
-    int offset = 4;
-    for (i = 0; i < packet.frame_count; ++i)
-    {
-        if (packet.frames[i].is_fragmented == 1)
-        {
-            buffer[offset] = packet.frames[i].reliability | 0x10;
-        }
-        else {
-            buffer[offset] = packet.frames[i].reliability;
-        }
-        offset += 1;
-        unsigned short body_bit_length = packet.frames[i].body_length << 3;
-        buffer[offset] = (body_bit_length >> 8) & 0xff;
-        offset += 1;
-        buffer[offset] = body_bit_length & 0xff;
-        offset += 1;
-        if (is_reliable(packet.frames[i].reliability))
-        {
-            buffer[2 + offset] = (packet.frames[i].reliable_frame_index >> 16) & 0xff;
-            buffer[1 + offset] = (packet.frames[i].reliable_frame_index >> 8) & 0xff;
-            buffer[offset] = packet.frames[i].reliable_frame_index & 0xff;
-            offset += 3;
-        }
-        if (is_sequenced(packet.frames[i].reliability))
-        {
-            buffer[2 + offset] = (packet.frames[i].sequenced_frame_index >> 16) & 0xff;
-            buffer[1 + offset] = (packet.frames[i].sequenced_frame_index >> 8) & 0xff;
-            buffer[offset] = packet.frames[i].sequenced_frame_index & 0xff;
-            offset += 3;
-        }
-        if (is_ordered(packet.frames[i].reliability))
-        {
-            buffer[2 + offset] = (packet.frames[i].ordered_frame_index >> 16) & 0xff;
-            buffer[1 + offset] = (packet.frames[i].ordered_frame_index >> 8) & 0xff;
-            buffer[offset] = packet.frames[i].ordered_frame_index & 0xff;
-            offset += 3;
-            buffer[offset] = packet.frames[i].order_channel & 0xff;
-            offset += 1;
-        }
-        if (packet.frames[i].is_fragmented == 1)
-        {
-            buffer[offset] = (packet.frames[i].compound_size >> 24) & 0xff;
-            offset += 1;
-            buffer[offset] = (packet.frames[i].compound_size >> 16) & 0xff;
-            offset += 1;
-            buffer[offset] = (packet.frames[i].compound_size >> 8) & 0xff;
-            offset += 1;
-            buffer[offset] = packet.frames[i].compound_size & 0xff;
-            offset += 1;
-            buffer[offset] = (packet.frames[i].compound_id >> 8) & 0xff;
-            offset += 1;
-            buffer[offset] = packet.frames[i].compound_id & 0xff;
-            offset += 1;
-            buffer[offset] = (packet.frames[i].index >> 24) & 0xff;
-            offset += 1;
-            buffer[offset] = (packet.frames[i].index >> 16) & 0xff;
-            offset += 1;
-            buffer[offset] = (packet.frames[i].index >> 8) & 0xff;
-            offset += 1;
-            buffer[offset] = packet.frames[i].index & 0xff;
-            offset += 1;
-        }
-        int j;
-        for (j = 0; j < packet.frames[i].body_length; ++j)
-        {
-            buffer[offset] = packet.frames[i].body[j] & 0xff;
-            offset += 1;
-        }
-    }
-    packet_t result;
-    result.buffer = buffer;
-    result.length = 4 + frames_length;
-    return result;
+    return stream;
 }

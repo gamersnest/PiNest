@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 typedef struct
 {
@@ -37,6 +38,8 @@ typedef struct
 	unsigned long long guid;
 	unsigned short mtu_size;
 	unsigned int last_sequence_number;
+	unsigned int send_sequence_number;
+	unsigned char has_connected;	
 } connection_t;
 
 connection_t *connections;
@@ -180,6 +183,8 @@ int main(int argc, char *argv[])
 			new_connection.guid = packet.client_guid;
 			new_connection.mtu_size = packet.mtu_size;
 			new_connection.last_sequence_number = 0;
+			new_connection.has_connected = 0;
+			new_connection.send_sequence_number = 0;
 			add_connection(new_connection);
 			printf("%lld\n", new_connection.guid);
 			printf("%lld\n", get_connection(out.address, out.port)->guid);
@@ -195,6 +200,7 @@ int main(int argc, char *argv[])
 			frame_set_t packet = decode_frame_set(&stream);
 			printf("SEQUENCE NUMBER -> %u\n", packet.sequence_number);
 			printf("FRAME COUNT -> %u\n", packet.frame_count);
+			printf("SEQUENCE NUMBER -> %u\n", connection->last_sequence_number);
 			if (connection->last_sequence_number < packet.sequence_number)
 			{
 				acknowledgement_t nack;
@@ -223,11 +229,53 @@ int main(int argc, char *argv[])
 			st.address = out.address;
 			st.port = out.port;
 			send_data(sock, st);
-			connection->last_sequence_number = packet.sequence_number;
+			connection->last_sequence_number = packet.sequence_number + 1;
 			int i;
 			for (i = 0; i < packet.frame_count; ++i)
 			{
 				printf("CUSTOM PACKET -> 0x%X\n", packet.frames[i].body[0] & 0xff);
+				binary_stream_t stream;
+    			stream.buffer = packet.frames[i].body;
+    			stream.offset = 0;
+    			stream.size = packet.frames[i].body_length;
+				if (connection->has_connected == 0)
+				{
+					if (stream.buffer[0] == ID_CONNECTION_REQUEST)
+					{
+						connection_request_t connection_request = decode_connection_request(&stream);
+						connection_request_accepted_t connection_request_accepted;
+						connection_request_accepted.client_address.hostname = out.address;
+						connection_request_accepted.client_address.port = out.port;
+						connection_request_accepted.client_address.version = 4;
+						connection_request_accepted.request_timestamp = connection_request.request_timestamp;
+						connection_request_accepted.accepted_timestamp = time(NULL);
+						binary_stream_t result = encode_connection_request_accepted(connection_request_accepted);
+						frame_t frame;
+						frame.body = result.buffer;
+						frame.body_length = result.size;
+						frame.is_fragmented = 0;
+						frame.reliability = 0;
+						frame_set_t set;
+						set.frame_count = 1;
+						set.frames = malloc(sizeof(frame_t));
+						set.frames[0] = frame;
+						set.sequence_number = connection->send_sequence_number;
+						++connection->send_sequence_number;
+						binary_stream_t set_stream = encode_frame_set(set);
+						st.buffer = set_stream.buffer;
+						st.buffer_length = set_stream.size;
+						st.address = out.address;
+						send_data(sock, st);
+					}
+				}
+				if (stream.buffer[0] == ID_CONNECTED_PING)
+				{
+					st.buffer = stream.buffer;
+					st.buffer[0] = 0x03;
+					st.buffer_length = stream.size;
+					st.address = out.address;
+					send_data(sock, st);
+				}
 			}
 		}
 	}

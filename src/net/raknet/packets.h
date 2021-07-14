@@ -72,6 +72,13 @@ typedef struct
 
 typedef struct
 {
+    address_t client_address;
+    unsigned long long request_timestamp;
+    unsigned long long accepted_timestamp;
+} connection_request_accepted_t;
+
+typedef struct
+{
 	unsigned char reliability;
     unsigned char is_fragmented;
     unsigned short body_length;
@@ -113,6 +120,8 @@ open_connection_reply_2_t decode_open_connection_reply_2(binary_stream_t *packet
 binary_stream_t encode_open_connection_reply_2(open_connection_reply_2_t packet);
 connection_request_t decode_connection_request(binary_stream_t *stream);
 binary_stream_t encode_connection_request(connection_request_t packet);
+connection_request_accepted_t decode_connection_request_accepted(binary_stream_t *stream);
+binary_stream_t encode_connection_request_accepted(connection_request_accepted_t packet);
 frame_set_t decode_frame_set(binary_stream_t *stream);
 binary_stream_t encode_frame_set(frame_set_t packet);
 acknowledgement_t decode_acknowledgement(binary_stream_t *stream);

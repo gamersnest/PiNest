@@ -257,6 +257,43 @@ binary_stream_t encode_connection_request(connection_request_t packet)
     return stream;
 }
 
+connection_request_accepted_t decode_connection_request_accepted(binary_stream_t *stream)
+{
+    connection_request_accepted_t packet;
+    ++stream->offset;
+    packet.client_address = get_address(stream);
+    int i;
+    for (i = 0; i < 10; ++i)
+    {
+        get_address(stream);
+    }
+    packet.request_timestamp = get_unsigned_long_be(stream);
+    packet.accepted_timestamp = get_unsigned_long_be(stream);
+    return packet;
+}
+
+binary_stream_t encode_connection_request_accepted(connection_request_accepted_t packet)
+{
+    binary_stream_t stream;
+    stream.buffer = malloc(0);
+    stream.offset = 0;
+    stream.size = 0;
+    put_unsigned_byte(ID_CONNECTION_REQUEST_ACCEPTED, &stream);
+    put_address(packet.client_address, &stream);
+    int i;
+    for (i = 0; i < 10; ++i)
+    {
+        address_t address;
+        address.hostname = "255.255.255.255";
+        address.port = 0;
+        address.version = 4;
+        put_address(address, &stream);
+    }
+    put_unsigned_long_be(packet.request_timestamp, &stream);
+    put_unsigned_long_be(packet.accepted_timestamp, &stream);
+    return stream;
+}
+
 frame_set_t decode_frame_set(binary_stream_t *stream)
 {
     frame_set_t packet;
@@ -402,13 +439,13 @@ binary_stream_t encode_acknowledgement(acknowledgement_t packet, unsigned char i
                 ++cnt;
                 if (temp > 1)
                 {
-                    put_unsigned_byte(0, &stream);
+                    put_unsigned_byte(0, &records_stream);
                     put_unsigned_triad_le(packet.sequence_numbers[i - temp + 1], &records_stream);
                     put_unsigned_triad_le(packet.sequence_numbers[i], &records_stream);
                 }
                 else
                 {
-                    put_unsigned_byte(1, &stream);
+                    put_unsigned_byte(1, &records_stream);
                     put_unsigned_triad_le(packet.sequence_numbers[i], &records_stream);
                 }
                 temp = 1;
@@ -423,11 +460,12 @@ binary_stream_t encode_acknowledgement(acknowledgement_t packet, unsigned char i
             if (packet.sequence_numbers[i] - packet.sequence_numbers[i - 1] != 1)
             {
                 ++cnt;
-                put_unsigned_byte(1, &stream);
+                put_unsigned_byte(1, &records_stream);
                 put_unsigned_triad_le(packet.sequence_numbers[i], &records_stream);
             }
         }
     }
+    put_short_be(cnt, &stream);
     put_bytes(records_stream.buffer, records_stream.size, &stream);
     return stream;
 }

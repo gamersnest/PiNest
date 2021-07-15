@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
 			unconnected_pong_t new_packet;
 			new_packet.client_timestamp = packet.client_timestamp;
 			new_packet.server_guid = 12345678;
-			new_packet.server_name = "MCCPP;Demo;Dedicated Server"; /*"MCCPP;Demo;Hello world";*/
+			new_packet.server_name = "MCCPP;MINECON;Dedicated Server";
 			binary_stream_t new_stream = encode_unconnected_pong(new_packet);
 			sockin_t st;
 			st.buffer = new_stream.buffer;
@@ -146,8 +146,6 @@ int main(int argc, char *argv[])
 			new_packet.server_guid = 12345678;
 			new_packet.use_security = 0;
 			new_packet.mtu_size = packet.mtu_size;
-			printf("PROTOCOL VERSION -> %u\n", packet.protocol_version);
-			printf("MTU -> %u\n", packet.mtu_size);
 			binary_stream_t new_stream = encode_open_connection_reply_1(new_packet);
 			sockin_t st;
 			st.buffer = new_stream.buffer;
@@ -198,9 +196,6 @@ int main(int argc, char *argv[])
     		stream.offset = 0;
     		stream.size = out.buffer_length;
 			frame_set_t packet = decode_frame_set(&stream);
-			printf("SEQUENCE NUMBER -> %u\n", packet.sequence_number);
-			printf("FRAME COUNT -> %u\n", packet.frame_count);
-			printf("SEQUENCE NUMBER -> %u\n", connection->last_sequence_number);
 			if (connection->last_sequence_number < packet.sequence_number)
 			{
 				acknowledgement_t nack;
@@ -240,7 +235,7 @@ int main(int argc, char *argv[])
     			stream.size = packet.frames[i].body_length;
 				if (connection->has_connected == 0)
 				{
-					if (stream.buffer[0] == ID_CONNECTION_REQUEST)
+					if ((stream.buffer[0] & 0xff) == ID_CONNECTION_REQUEST)
 					{
 						connection_request_t connection_request = decode_connection_request(&stream);
 						connection_request_accepted_t connection_request_accepted;
@@ -272,20 +267,84 @@ int main(int argc, char *argv[])
 						connection->has_connected = 1;
 					}
 				}
-				else if (stream.buffer[0] == ID_CONNECTED_PING)
+				if ((stream.buffer[0] & 0xff) == ID_CONNECTED_PING)
 				{
 					connected_ping_t connected_ping = decode_connected_ping(&stream);
 					connected_pong_t connected_pong;
 					connected_pong.client_timestamp = connected_ping.client_timestamp;
 					binary_stream_t connected_pong_stream = encode_connected_pong(connected_pong);
-					st.buffer = connected_pong_stream.buffer;
-					st.buffer_length = connected_pong_stream.size;
+					frame_t frame;
+					frame.body = connected_pong_stream.buffer;
+					frame.body_length = connected_pong_stream.size;
+					frame.is_fragmented = 0;
+					frame.reliability = 0;
+					frame_set_t set;
+					set.frame_count = 1;
+					set.frames = malloc(sizeof(frame_t));
+					set.frames[0] = frame;
+					set.sequence_number = connection->send_sequence_number;
+					++connection->send_sequence_number;
+					binary_stream_t set_stream = encode_frame_set(set);
+					st.buffer = set_stream.buffer;
+					st.buffer_length = set_stream.size;
 					st.address = out.address;
 					send_data(sock, st);
 				}
-				else if (stream.buffer[0] == ID_DISCONNECTION_NOTIFICATION)
+				else if ((stream.buffer[0] & 0xff) == ID_DISCONNECTION_NOTIFICATION)
 				{
 					remove_connection(out.address, out.port);
+					printf("Disconnected\n");
+				}
+				else if ((stream.buffer[0] & 0xff) == 0x82)
+				{
+					binary_stream_t status_stream;
+					status_stream.buffer = malloc(0);
+    				status_stream.offset = 0;
+    				status_stream.size = 0;
+					put_unsigned_byte(0x83, &status_stream);
+					put_unsigned_int_be(0, &status_stream);
+					binary_stream_t start_stream;
+					start_stream.buffer = malloc(0);
+    				start_stream.offset = 0;
+    				start_stream.size = 0;
+					put_unsigned_byte(0x87, &start_stream);
+					put_unsigned_int_be(0, &start_stream);
+					put_unsigned_int_be(0, &start_stream);
+					put_unsigned_int_be(1, &start_stream);
+					put_unsigned_int_be(1, &start_stream);
+					put_float_be(0 + 128, &start_stream);
+					put_float_be(9 + 64, &start_stream);
+					put_float_be(0 + 128, &start_stream);
+					frame_t frame;
+					frame.body = status_stream.buffer;
+					frame.body_length = status_stream.size;
+					frame.is_fragmented = 0;
+					frame.reliability = 0;
+					frame_set_t set;
+					set.frame_count = 1;
+					set.frames = malloc(sizeof(frame_t));
+					set.frames[0] = frame;
+					set.sequence_number = connection->send_sequence_number;
+					++connection->send_sequence_number;
+					binary_stream_t set_stream = encode_frame_set(set);
+					st.buffer = set_stream.buffer;
+					st.buffer_length = set_stream.size;
+					st.address = out.address;
+					send_data(sock, st);
+					frame.body = start_stream.buffer;
+					frame.body_length = start_stream.size;
+					frame.is_fragmented = 0;
+					frame.reliability = 0;
+					set.frame_count = 1;
+					set.frames = malloc(sizeof(frame_t));
+					set.frames[0] = frame;
+					set.sequence_number = connection->send_sequence_number;
+					++connection->send_sequence_number;
+					set_stream = encode_frame_set(set);
+					st.buffer = set_stream.buffer;
+					st.buffer_length = set_stream.size;
+					st.address = out.address;
+					send_data(sock, st);
 				}
 			}
 		}

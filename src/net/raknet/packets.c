@@ -23,8 +23,7 @@
 #include <winsock2.h>
 #pragma comment(lib,"ws2_32.lib")
 
-#endif
-#ifdef linux
+#else
 
 #include <arpa/inet.h>
 
@@ -335,7 +334,7 @@ frame_set_t decode_frame_set(binary_stream_t *stream)
     frame_set_t packet;
     ++stream->offset;
     packet.sequence_number = get_unsigned_triad_le(stream);
-    packet.frames = malloc(sizeof(frame_t));
+    packet.frames = malloc(0);
     packet.frame_count = 0;
     frame_t frame;
     while (stream->offset < stream->size)
@@ -421,7 +420,7 @@ acknowledgement_t decode_acknowledgement(binary_stream_t *stream)
 {
     acknowledgement_t packet;
     ++stream->offset;
-    packet.sequence_numbers = malloc(sizeof(unsigned int));
+    packet.sequence_numbers = malloc(0);
     packet.sequence_numbers_count = 0;
     unsigned short record_count = get_unsigned_short_be(stream);
     int i;

@@ -116,6 +116,8 @@ typedef struct {
 
 char *get_string(binary_stream_t *stream);
 void put_string(char *value, binary_stream_t *stream);
+address_t get_address(binary_stream_t *stream);
+void put_address(address_t address, binary_stream_t *stream);
 unconnected_ping_t decode_unconnected_ping(binary_stream_t *stream);
 binary_stream_t encode_unconnected_ping(unconnected_ping_t packet);
 unconnected_pong_t decode_unconnected_pong(binary_stream_t *stream);

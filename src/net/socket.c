@@ -17,12 +17,12 @@
 #include <ws2tcpip.h>
 #pragma comment(lib,"ws2_32.lib")
 
-#endif
-#ifdef linux
+#else
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <fcntl.h>
 
 #endif
 #include "../net/socket.h"
@@ -31,6 +31,25 @@
 #include <string.h>
 #include <sys/types.h>
 
+int set_nonblocking_socket(int fd, int nonblocking)
+{
+    if (fd < 0)
+    {
+        return 0;
+    }
+    #ifdef _WIN32
+    unsigned long mode = nonblocking;
+    return (ioctlsocket(fd, FIONBIO, &mode) == 0);
+    #else
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+    {
+        return 0;
+    }
+    flags = nonblocking == 0 ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
+    return (fcntl(fd, F_SETFL, flags) == 0);
+    #endif
+}
 
 int create_socket(char *address, int port)
 {
@@ -45,6 +64,7 @@ int create_socket(char *address, int port)
 
     #endif
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    set_nonblocking_socket(sock, 1);
     struct sockaddr_in s_address;
     memset(&s_address, 0, sizeof(s_address));
     s_address.sin_family = AF_INET;

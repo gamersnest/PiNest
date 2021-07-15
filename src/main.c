@@ -163,14 +163,54 @@ char *concate(char* a, char *b)
 	return result;
 }
 
+int has_put_input()
+{
+  struct timeval tv;
+  fd_set fds;
+  tv.tv_sec = 0;
+  tv.tv_usec = 0;
+  FD_ZERO(&fds);
+  FD_SET(fileno(stdin), &fds);
+  select(fileno(stdin) + 1, &fds, NULL, NULL, &tv);
+  return (FD_ISSET(0, &fds));
+}
+
 int main(int argc, char *argv[])
 {
 	log_info("Starting up...");
 	init_connections();
     int sock = create_socket("0.0.0.0", 19132);
-	log_success("Done.");
+	char *command = malloc(1);
+	command[0] = 0x00;
+	log_success("Done. Type \"help\" or \"?\" to view all available commands.");
     while (1)
     {
+		if (has_put_input() == 1)
+		{
+			int line_size = 1000;
+			char* input = malloc(line_size);
+			fgets(input, line_size, stdin);
+			input[strlen(input) - 1] = 0x00;
+			if (strcmp(input, "stop") == 0)
+			{
+				exit(0);
+			}
+			else if (strcmp(input, "help") == 0 || strcmp(input, "?") == 0)
+			{
+				log_info("--- Showing help ---");
+				log_info("help | Shows all available commands");
+				log_info("stop | Stops the server");
+				log_info("version | Shows PiNest's version info");
+			}
+			else if (strcmp(input, "version") == 0 || strcmp(input, "ver") == 0 || strcmp(input, "about") == 0)
+			{
+				log_info("This server is running PiNest version 0.1-alpha for mcpi 0.1.1");
+			}
+			else
+			{
+				log_info("Command not found.");
+			}
+		}
 		sockin_t out = receive_data(sock);
 		if (out.buffer_length > 0)
 		{

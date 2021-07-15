@@ -267,14 +267,25 @@ int main(int argc, char *argv[])
 						st.address = out.address;
 						send_data(sock, st);
 					}
+					else if (stream.buffer[0] == ID_NEW_INCOMING_CONNECTION)
+					{
+						connection->has_connected = 1;
+					}
 				}
-				if (stream.buffer[0] == ID_CONNECTED_PING)
+				else if (stream.buffer[0] == ID_CONNECTED_PING)
 				{
-					st.buffer = stream.buffer;
-					st.buffer[0] = 0x03;
-					st.buffer_length = stream.size;
+					connected_ping_t connected_ping = decode_connected_ping(&stream);
+					connected_pong_t connected_pong;
+					connected_pong.client_timestamp = connected_ping.client_timestamp;
+					binary_stream_t connected_pong_stream = encode_connected_pong(connected_pong);
+					st.buffer = connected_pong_stream.buffer;
+					st.buffer_length = connected_pong_stream.size;
 					st.address = out.address;
 					send_data(sock, st);
+				}
+				else if (stream.buffer[0] == ID_DISCONNECTION_NOTIFICATION)
+				{
+					remove_connection(out.address, out.port);
 				}
 			}
 		}

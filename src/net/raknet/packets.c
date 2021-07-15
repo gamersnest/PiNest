@@ -294,6 +294,42 @@ binary_stream_t encode_connection_request_accepted(connection_request_accepted_t
     return stream;
 }
 
+connected_ping_t decode_connected_ping(binary_stream_t *stream)
+{
+    connected_ping_t packet;
+    packet.client_timestamp = get_unsigned_long_be(stream);
+    return packet;
+}
+
+binary_stream_t encode_connected_ping(connected_ping_t packet)
+{
+    binary_stream_t stream;
+    stream.buffer = malloc(0);
+    stream.offset = 0;
+    stream.size = 0;
+    put_unsigned_byte(ID_CONNECTED_PING, &stream);
+    put_unsigned_long_be(packet.client_timestamp, &stream);
+    return stream;
+}
+
+connected_pong_t decode_connected_pong(binary_stream_t *stream)
+{
+    connected_pong_t packet;
+    packet.client_timestamp = get_unsigned_long_be(stream);
+    return packet;
+}
+
+binary_stream_t encode_connected_pong(connected_pong_t packet)
+{
+    binary_stream_t stream;
+    stream.buffer = malloc(0);
+    stream.offset = 0;
+    stream.size = 0;
+    put_unsigned_byte(ID_CONNECTED_PONG, &stream);
+    put_unsigned_long_be(packet.client_timestamp, &stream);
+    return stream;
+}
+
 frame_set_t decode_frame_set(binary_stream_t *stream)
 {
     frame_set_t packet;
@@ -427,43 +463,50 @@ binary_stream_t encode_acknowledgement(acknowledgement_t packet, unsigned char i
     records_stream.buffer = malloc(0);
     records_stream.offset = 0;
     records_stream.size = 0;
-    int cnt = 0;
-    int temp = 1;
-    int i;
-    for (i = 0; i < packet.sequence_numbers_count; ++i)
+    unsigned short cnt = 0;
+    if (packet.sequence_numbers_count > 0)
     {
-        if (i != packet.sequence_numbers_count - 1)
+        unsigned int start_index = packet.sequence_numbers[0];
+        unsigned int end_index = packet.sequence_numbers[0];
+        int pointer;
+        for (pointer = 1; pointer < packet.sequence_numbers_count; ++pointer)
         {
-            if ((packet.sequence_numbers[i + 1] - packet.sequence_numbers[i]) != 1)
+            unsigned int current_index = packet.sequence_numbers[pointer];
+            unsigned int diff = current_index - end_index;
+            if (diff == 1)
             {
-                ++cnt;
-                if (temp > 1)
+                end_index = current_index;
+            }
+            else if (diff > 1)
+            {
+                if (start_index == end_index)
                 {
-                    put_unsigned_byte(0, &records_stream);
-                    put_unsigned_triad_le(packet.sequence_numbers[i - temp + 1], &records_stream);
-                    put_unsigned_triad_le(packet.sequence_numbers[i], &records_stream);
+                    put_unsigned_byte(1, &records_stream);
+                    put_unsigned_triad_le(start_index, &records_stream);
+                    start_index = end_index = current_index;
                 }
                 else
                 {
-                    put_unsigned_byte(1, &records_stream);
-                    put_unsigned_triad_le(packet.sequence_numbers[i], &records_stream);
+                    put_unsigned_byte(0, &records_stream);
+                    put_unsigned_triad_le(start_index, &records_stream);
+                    put_unsigned_triad_le(end_index, &records_stream);
+                    start_index = end_index = current_index;
                 }
-                temp = 1;
+                ++cnt;
             }
-            else
-            {
-                ++temp;
-            }
+        }
+        if (start_index == end_index)
+        {
+            put_unsigned_byte(1, &records_stream);
+            put_unsigned_triad_le(start_index, &records_stream);
         }
         else
         {
-            if (packet.sequence_numbers[i] - packet.sequence_numbers[i - 1] != 1)
-            {
-                ++cnt;
-                put_unsigned_byte(1, &records_stream);
-                put_unsigned_triad_le(packet.sequence_numbers[i], &records_stream);
-            }
+            put_unsigned_byte(0, &records_stream);
+            put_unsigned_triad_le(start_index, &records_stream);
+            put_unsigned_triad_le(end_index, &records_stream);
         }
+        ++cnt;
     }
     put_short_be(cnt, &stream);
     put_bytes(records_stream.buffer, records_stream.size, &stream);

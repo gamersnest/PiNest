@@ -79,6 +79,16 @@ typedef struct
 
 typedef struct
 {
+    unsigned long long client_timestamp;
+} connected_ping_t;
+
+typedef struct
+{
+    unsigned long long client_timestamp;
+} connected_pong_t;
+
+typedef struct
+{
 	unsigned char reliability;
     unsigned char is_fragmented;
     unsigned short body_length;
@@ -122,6 +132,10 @@ connection_request_t decode_connection_request(binary_stream_t *stream);
 binary_stream_t encode_connection_request(connection_request_t packet);
 connection_request_accepted_t decode_connection_request_accepted(binary_stream_t *stream);
 binary_stream_t encode_connection_request_accepted(connection_request_accepted_t packet);
+connected_ping_t decode_connected_ping(binary_stream_t *stream);
+binary_stream_t encode_connected_ping(connected_ping_t packet);
+connected_pong_t decode_connected_pong(binary_stream_t *stream);
+binary_stream_t encode_connected_pong(connected_pong_t packet);
 frame_set_t decode_frame_set(binary_stream_t *stream);
 binary_stream_t encode_frame_set(frame_set_t packet);
 acknowledgement_t decode_acknowledgement(binary_stream_t *stream);

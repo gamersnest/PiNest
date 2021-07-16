@@ -14,12 +14,15 @@
 #include "./binary_stream/binary_stream.h"
 #include "./net/raknet/packets.h"
 #include "./net/raknet/message_identifiers.h"
+#include "./net/raknet/frame_util.h"
 #include "./net/socket.h"
 #include "./logger.h"
 #ifdef _WIN32
 
 #include <winsock2.h>
 #pragma comment(lib,"ws2_32.lib")
+#include <windows.h>
+#include <conio.h>
 
 #else
 
@@ -34,7 +37,7 @@
 typedef struct
 {
 	frame_set_t *queue;
-	size_t size;
+	unsigned int size;
 } recovery_queue_t;
 
 typedef struct
@@ -78,16 +81,21 @@ void send_queue(connection_t *connection, int sock)
 
 void add_to_queue(frame_t frame, unsigned char is_immediate, connection_t *connection, int sock)
 {
+	if (is_immediate == 0)
+	{
+		unsigned int frame_size = get_frame_size(frame);
+		unsigned int frame_set_size = get_frame_set_size(connection->queue);
+		if (frame_set_size + frame_size > connection->mtu_size)
+		{
+			send_queue(connection, sock);
+		}
+	}
 	++connection->queue.frame_count;
 	connection->queue.frames = realloc(connection->queue.frames, connection->queue.frame_count * sizeof(frame_t));
 	connection->queue.frames[connection->queue.frame_count - 1] = frame;
-	if (is_immediate == 1)
+	if (is_immediate > 0)
 	{
 		send_queue(connection, sock);
-	}
-	else
-	{
-		// Todo non immediate
 	}
 }
 
@@ -156,61 +164,111 @@ void remove_connection(char *address, unsigned short port)
 
 char *concate(char* a, char *b)
 {
-	size_t size = snprintf(NULL, 0, "%s%s", a, b);
+	unsigned int size = snprintf(NULL, 0, "%s%s", a, b);
 	char *result = malloc(size + 1);
 	sprintf(result, "%s%s", a, b);
 	result[size] = 0x00;
 	return result;
 }
 
-int has_put_input()
+int enterhit()
 {
-  struct timeval tv;
-  fd_set fds;
-  tv.tv_sec = 0;
-  tv.tv_usec = 0;
-  FD_ZERO(&fds);
-  FD_SET(fileno(stdin), &fds);
-  select(fileno(stdin) + 1, &fds, NULL, NULL, &tv);
-  return (FD_ISSET(0, &fds));
+	struct timeval timeout;
+	fd_set rdset;
+	FD_ZERO(&rdset);
+	FD_SET(fileno(stdin), &rdset);
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 0;
+	return select(fileno(stdin) + 1, &rdset, NULL, NULL, &timeout);
+}
+
+void handle_command(char *command)
+{
+	if (strcmp(command, "stop") == 0)
+	{
+		exit(0);
+	}
+	else if (strcmp(command, "help") == 0 || strcmp(command, "?") == 0)
+	{
+		log_info("--- Showing help ---");
+		log_info("help | Shows all available commands");
+		log_info("stop | Stops the server");
+		log_info("version | Shows PiNest's version info");
+	}
+	else if (strcmp(command, "version") == 0 || strcmp(command, "ver") == 0 || strcmp(command, "about") == 0)
+	{
+		log_info("This server is running PiNest version 0.1-alpha for mcpi 0.1.1");
+	}
+	else
+	{
+		log_info("Command not found.");
+	}
 }
 
 int main(int argc, char *argv[])
 {
+	#ifdef _WIN32
+	HANDLE hstdout = GetStdHandle(STD_OUTPUT_HANDLE);
+	SetConsoleMode(hstdout, ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+	#endif
 	log_info("Starting up...");
-	init_connections();
     int sock = create_socket("0.0.0.0", 19132);
-	char *command = malloc(1);
-	command[0] = 0x00;
 	log_success("Done. Type \"help\" or \"?\" to view all available commands.");
+	#ifdef _WIN32
+	char *command = "";
+	char is_arrow = 0;
+	#endif
     while (1)
     {
-		if (has_put_input() == 1)
+		#ifdef _WIN32
+		
+		if (kbhit())
 		{
-			int line_size = 1000;
-			char* input = malloc(line_size);
-			fgets(input, line_size, stdin);
-			input[strlen(input) - 1] = 0x00;
-			if (strcmp(input, "stop") == 0)
+			CONSOLE_SCREEN_BUFFER_INFO info;
+			GetConsoleScreenBufferInfo(hstdout, &info);
+			COORD pos = info.dwSize;
+			char c = getch() & 0xff;
+			if (c == '\b')
 			{
-				exit(0);
+				command[strlen(command) - 1] = 0x00;
+				printf("\r\x1b[K%s", command);
 			}
-			else if (strcmp(input, "help") == 0 || strcmp(input, "?") == 0)
+			else if (c != '\r')
 			{
-				log_info("--- Showing help ---");
-				log_info("help | Shows all available commands");
-				log_info("stop | Stops the server");
-				log_info("version | Shows PiNest's version info");
-			}
-			else if (strcmp(input, "version") == 0 || strcmp(input, "ver") == 0 || strcmp(input, "about") == 0)
-			{
-				log_info("This server is running PiNest version 0.1-alpha for mcpi 0.1.1");
+				char *input = malloc(2);
+				input[0] = c;
+				input[1] = 0x00;
+				command = concate(command, input);
+				printf("\r\x1b[K%s", command);
 			}
 			else
 			{
-				log_info("Command not found.");
+				printf("\n");
+				handle_command(command);
+				command = "";
 			}
 		}
+		#else
+		if (enterhit() > 0)
+		{
+			char *command = "";
+			while (1) {
+				char c = getchar();
+				if (c != '\n')
+				{
+					char *input = malloc(2);
+					input[0] = c;
+					input[1] = 0x00;
+					command = concate(command, input);
+				}
+				else
+				{
+					handle_command(command);
+					break;
+				}
+			}
+		}
+		#endif
 		sockin_t out = receive_data(sock);
 		if (out.buffer_length > 0)
 		{
@@ -419,7 +477,7 @@ int main(int argc, char *argv[])
 							frame.body_length = result.size;
 							frame.is_fragmented = 0;
 							frame.reliability = 0;
-							add_to_queue(frame, 1, connection, sock);
+							add_to_queue(frame, 0, connection, sock);
 						}
 						else if (stream.buffer[0] == ID_NEW_INCOMING_CONNECTION)
 						{
@@ -437,7 +495,7 @@ int main(int argc, char *argv[])
 						frame.body_length = connected_pong_stream.size;
 						frame.is_fragmented = 0;
 						frame.reliability = 0;
-						add_to_queue(frame, 1, connection, sock);
+						add_to_queue(frame, 0, connection, sock);
 					}
 					else if ((stream.buffer[0] & 0xff) == ID_DISCONNECTION_NOTIFICATION)
 					{
@@ -472,19 +530,25 @@ int main(int argc, char *argv[])
 						frame.body_length = status_stream.size;
 						frame.is_fragmented = 0;
 						frame.reliability = 0;
-						add_to_queue(frame, 1, connection, sock);
+						add_to_queue(frame, 0, connection, sock);
 						frame.body = start_stream.buffer;
 						frame.body_length = start_stream.size;
 						frame.is_fragmented = 0;
 						frame.reliability = 0;
-						add_to_queue(frame, 1, connection, sock);
+						add_to_queue(frame, 0, connection, sock);
 					}
 					else if ((stream.buffer[0] & 0xff) == 0x84)
 					{
+						printf("%s\n", connection->username);
 						log_info(concate(connection->username, " joined the server!"));
 					}
 				}
 			}
 		}
+		int i;
+		for (i = 0; i < connection_count; ++i)
+		{
+			send_queue(&connections[i], sock);
+		}		
 	}
 }

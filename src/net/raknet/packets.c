@@ -60,7 +60,7 @@ address_t get_address(binary_stream_t *stream)
         unsigned char part_2 = ~get_unsigned_byte(stream) & 0xff;
         unsigned char part_3 = ~get_unsigned_byte(stream) & 0xff;
         unsigned char part_4 = ~get_unsigned_byte(stream) & 0xff;
-        size_t size = snprintf(NULL, 0, "%d.%d.%d.%d", part_1, part_2, part_3, part_4);
+        unsigned int size = snprintf(NULL, 0, "%d.%d.%d.%d", part_1, part_2, part_3, part_4);
         address.hostname = malloc(size);
         sprintf(address.hostname, "%d.%d.%d.%d", part_1, part_2, part_3, part_4);
         address.port = get_unsigned_short_be(stream);
@@ -77,7 +77,7 @@ void put_address(address_t address, binary_stream_t *stream)
     put_unsigned_byte(address.version, stream);
     if (address.version == 4)
     {
-        size_t packed_address = inet_addr(address.hostname);
+        unsigned int packed_address = inet_addr(address.hostname);
         put_unsigned_byte(~(packed_address & 0xff), stream);
         put_unsigned_byte(~((packed_address >> 8) & 0xff) & 0xff, stream);
         put_unsigned_byte(~((packed_address >> 16) & 0xff) & 0xff, stream);

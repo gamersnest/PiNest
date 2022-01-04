@@ -29,7 +29,7 @@
 
 #endif
 
-char MAGIC[16] = {
+char magic[16] = {
         0x00, static_cast<char>(0xff), static_cast<char>(0xff), 0x00,
         static_cast<char>(0xfe), static_cast<char>(0xfe), static_cast<char>(0xfe), static_cast<char>(0xfe),
         static_cast<char>(0xfd), static_cast<char>(0xfd), static_cast<char>(0xfd), static_cast<char>(0xfd),
